@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Application Tracker</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .status-column {
+            min-height: 200px;
+        }
+        .job-card {
+            transition: all 0.2s ease;
+        }
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Auto-detect company and title from URL
+        function extractJobInfo(url) {
+            try {
+                const urlLower = url.toLowerCase();
+                let company = '';
+                let title = '';
+
+                // LinkedIn detection
+                if (urlLower.includes('linkedin.com')) {
+                    company = 'LinkedIn Job';
+                    const match = url.match(/\/jobs\/view\/([^\/\?]+)/);
+                    if (match) {
+                        title = match[1].split('-').slice(0, -1).join(' ');
+                        title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    }
+                }
+                // Indeed detection
+                else if (urlLower.includes('indeed.com')) {
+                    company = 'Indeed Job';
+                    const titleMatch = url.match(/q=([^&]+)/);
+                    if (titleMatch) {
+                        title = decodeURIComponent(titleMatch[1].replace(/\+/g, ' '));
+                    }
+                }
+                // Glassdoor detection
+                else if (urlLower.includes('glassdoor.com')) {
+                    company = 'Glassdoor Job';
+                }
+                // Try to extract from domain for company sites
+                else {
+                    const domain = new URL(url).hostname.replace('www.', '').split('.')[0];
+                    company = domain.charAt(0).toUpperCase() + domain.slice(1);
+                }
+
+                return { company, title };
+            } catch (e) {
+                return { company: '', title: '' };
+            }
+        }
+
+        function JobTracker() {
+            const [applications, setApplications] = useState([]);
+            const [url, setUrl] = useState('');
+            const [company, setCompany] = useState('');
+            const [title, setTitle] = useState('');
+            const [todayCount, setTodayCount] = useState(0);
+
+            // Load from localStorage
+            useEffect(() => {
+                const saved = localStorage.getItem('jobApplications');
+                if (saved) {
+                    setApplications(JSON.parse(saved));
+                }
+            }, []);
+
+            // Save to localStorage
+            useEffect(() => {
+                localStorage.setItem('jobApplications', JSON.stringify(applications));
+                
+                // Count today's applications
+                const today = new Date().toDateString();
+                const count = applications.filter(app => 
+                    new Date(app.dateAdded).toDateString() === today
+                ).length;
+                setTodayCount(count);
+            }, [applications]);
+
+            // Auto-detect when URL changes
+            useEffect(() => {
+                if (url.trim()) {
+                    const info = extractJobInfo(url);
+                    if (info.company && !company) setCompany(info.company);
+                    if (info.title && !title) setTitle(info.title);
+                }
+            }, [url]);
+
+            const addApplication = (e) => {
+                e.preventDefault();
+                if (!url.trim()) return;
+
+                const newApp = {
+                    id: Date.now(),
+                    company: company || 'Unknown Company',
+                    title: title || 'Position',
+                    url: url.trim(),
+                    status: 'saved',
+                    dateAdded: new Date().toISOString(),
+                    notes: ''
+                };
+
+                setApplications([newApp, ...applications]);
+                
+                // Reset form
+                setUrl('');
+                setCompany('');
+                setTitle('');
+            };
+
+            const updateStatus = (id, newStatus) => {
+                setApplications(applications.map(app =>
+                    app.id === id ? { ...app, status: newStatus } : app
+                ));
+            };
+
+            const deleteApplication = (id) => {
+                if (confirm('Delete this application?')) {
+                    setApplications(applications.filter(app => app.id !== id));
+                }
+            };
+
+            const statuses = [
+                { key: 'saved', label: 'Saved', color: 'bg-gray-100', textColor: 'text-gray-700' },
+                { key: 'applied', label: 'Applied', color: 'bg-blue-100', textColor: 'text-blue-700' },
+                { key: 'interview', label: 'Interview', color: 'bg-yellow-100', textColor: 'text-yellow-700' },
+                { key: 'offer', label: 'Offer', color: 'bg-green-100', textColor: 'text-green-700' },
+                { key: 'rejected', label: 'Rejected', color: 'bg-red-100', textColor: 'text-red-700' }
+            ];
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    {/* Header */}
+                    <div className="max-w-7xl mx-auto mb-8">
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-900">Job Application Tracker</h1>
+                                    <p className="text-gray-600 mt-1">Stay organized and reach your goals</p>
+                                </div>
+                                <div className="mt-4 md:mt-0">
+                                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-4 text-white text-center">
+                                        <div className="text-4xl font-bold">{todayCount}/50</div>
+                                        <div className="text-sm opacity-90">Applications Today</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Quick Add Form */}
+                            <form onSubmit={addApplication} className="space-y-3">
+                                <div>
+                                    <input
+                                        type="url"
+                                        value={url}
+                                        onChange={(e) => setUrl(e.target.value)}
+                                        placeholder="Paste job URL here (LinkedIn, Indeed, company site...)"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <input
+                                        type="text"
+                                        value={company}
+                                        onChange={(e) => setCompany(e.target.value)}
+                                        placeholder="Company name (auto-detected)"
+                                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="Job title (auto-detected)"
+                                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                                >
+                                    + Add Job Application
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {/* Status Columns */}
+                    <div className="max-w-7xl mx-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            {statuses.map(status => {
+                                const statusApps = applications.filter(app => app.status === status.key);
+                                
+                                return (
+                                    <div key={status.key} className="bg-white rounded-lg shadow-sm p-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="font-semibold text-gray-900">{status.label}</h3>
+                                            <span className="bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-1 rounded-full">
+                                                {statusApps.length}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="status-column space-y-3">
+                                            {statusApps.map(app => (
+                                                <div
+                                                    key={app.id}
+                                                    className={`job-card ${status.color} rounded-lg p-4 cursor-pointer`}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-semibold text-sm text-gray-900 leading-tight">
+                                                            {app.company}
+                                                        </h4>
+                                                        <button
+                                                            onClick={() => deleteApplication(app.id)}
+                                                            className="text-gray-400 hover:text-red-600"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600 mb-3">{app.title}</p>
+                                                    <a
+                                                        href={app.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-blue-600 hover:underline block mb-3 truncate"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        View Job →
+                                                    </a>
+                                                    <div className="text-xs text-gray-500 mb-3">
+                                                        {new Date(app.dateAdded).toLocaleDateString()}
+                                                    </div>
+                                                    
+                                                    {/* Status Change Buttons */}
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {statuses.filter(s => s.key !== status.key).map(s => (
+                                                            <button
+                                                                key={s.key}
+                                                                onClick={() => updateStatus(app.id, s.key)}
+                                                                className={`text-xs px-2 py-1 rounded ${s.color} ${s.textColor} hover:opacity-80`}
+                                                            >
+                                                                → {s.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Stats Footer */}
+                    <div className="max-w-7xl mx-auto mt-8">
+                        <div className="bg-white rounded-lg shadow-sm p-6">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                                <div>
+                                    <div className="text-2xl font-bold text-gray-900">{applications.length}</div>
+                                    <div className="text-sm text-gray-600">Total</div>
+                                </div>
+                                {statuses.map(status => {
+                                    const count = applications.filter(app => app.status === status.key).length;
+                                    return (
+                                        <div key={status.key}>
+                                            <div className="text-2xl font-bold text-gray-900">{count}</div>
+                                            <div className="text-sm text-gray-600">{status.label}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<JobTracker />, document.getElementById('root'));
+    </script>
+</body>
+</html>
